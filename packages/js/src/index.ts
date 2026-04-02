@@ -1,4 +1,4 @@
-export { createSearchClient } from "./adapter/index.js";
+export { createSearchClient } from "./adapter/index";
 export type {
   SearchClient,
   SearchRequest,
@@ -6,4 +6,4 @@ export type {
   SearchResponseResult,
   Hit,
   FacetValue,
-} from "./adapter/types.js";
+} from "./adapter/types";

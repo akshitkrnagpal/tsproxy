@@ -1,7 +1,7 @@
-import type { SearchClient } from "instantsearch.js";
+import type { SearchClient } from "./types";
 
-export type { SearchClient } from "./types.js";
-export type { SearchRequest, SearchResponse, SearchResponseResult, Hit, FacetValue } from "./types.js";
+export type { SearchClient } from "./types";
+export type { SearchRequest, SearchResponse, SearchResponseResult, Hit, FacetValue } from "./types";
 
 interface CreateSearchClientOptions {
   url: string;

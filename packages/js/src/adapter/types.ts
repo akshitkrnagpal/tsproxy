@@ -1,8 +1,12 @@
 /**
- * Re-export the SearchClient type from instantsearch.js for Algolia compatibility.
- * Our createSearchClient() returns this type so it can be passed directly to <InstantSearch>.
+ * Algolia-compatible SearchClient interface.
+ * Can be passed directly to InstantSearch's searchClient prop.
  */
-export type { SearchClient } from "instantsearch.js";
+export interface SearchClient {
+  search(requests: readonly SearchRequest[]): Promise<SearchResponse>;
+  searchForFacetValues?(requests: readonly SearchRequest[]): Promise<SearchResponse>;
+  clearCache?(): void;
+}
 
 export interface SearchRequest {
   indexName: string;
