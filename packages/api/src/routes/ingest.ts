@@ -11,6 +11,7 @@ export function createIngestRoutes(config: Config, collectionDefs?: Record<strin
   const queue = new IngestionQueue({
     concurrency: config.queue.concurrency,
     maxSize: config.queue.maxSize,
+    redis: config.queue.redis,
   });
   const typesense = getTypesenseClient(config);
 
@@ -188,7 +189,7 @@ export function createIngestRoutes(config: Config, collectionDefs?: Record<strin
 
   // Queue status
   app.get("/api/ingest/queue/status", async (c) => {
-    return c.json(queue.stats());
+    return c.json(await queue.stats());
   });
 
   return { app, queue };

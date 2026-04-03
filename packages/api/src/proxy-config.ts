@@ -90,6 +90,8 @@ export interface ProxyConfig {
     concurrency?: number;
     /** Max queued tasks before rejecting (default: 10000) */
     maxSize?: number;
+    /** Redis connection for persistent queue (falls back to in-memory) */
+    redis?: { host?: string; port?: number };
   };
 
   /** Rate limiting (requests per minute) */
@@ -150,6 +152,12 @@ export function proxyConfigToConfig(proxyConfig: ProxyConfig): Config {
     queue: {
       concurrency: proxyConfig.queue?.concurrency ?? parseInt(process.env["QUEUE_CONCURRENCY"] || "5", 10),
       maxSize: proxyConfig.queue?.maxSize ?? parseInt(process.env["QUEUE_MAX_SIZE"] || "10000", 10),
+      ...(proxyConfig.queue?.redis || process.env["REDIS_HOST"] ? {
+        redis: {
+          host: proxyConfig.queue?.redis?.host || process.env["REDIS_HOST"] || "localhost",
+          port: proxyConfig.queue?.redis?.port || parseInt(process.env["REDIS_PORT"] || "6379", 10),
+        },
+      } : {}),
     },
     rateLimit: {
       search: proxyConfig.rateLimit?.search ?? parseInt(process.env["RATE_LIMIT_SEARCH"] || "100", 10),

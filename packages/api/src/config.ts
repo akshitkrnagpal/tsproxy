@@ -31,6 +31,7 @@ export interface Config {
   queue: {
     concurrency: number;
     maxSize: number;
+    redis?: { host: string; port: number };
   };
   rateLimit: {
     search: number;
@@ -98,6 +99,12 @@ export function loadConfig(): Config {
     queue: {
       concurrency: numEnv("QUEUE_CONCURRENCY", 5),
       maxSize: numEnv("QUEUE_MAX_SIZE", 10000),
+      ...(process.env["REDIS_HOST"] ? {
+        redis: {
+          host: optionalEnv("REDIS_HOST", "localhost"),
+          port: numEnv("REDIS_PORT", 6379),
+        },
+      } : {}),
     },
     rateLimit: {
       search: numEnv("RATE_LIMIT_SEARCH", 100),

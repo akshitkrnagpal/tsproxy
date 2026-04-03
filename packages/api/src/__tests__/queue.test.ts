@@ -63,14 +63,14 @@ describe("IngestionQueue", () => {
       // expected
     }
 
-    const stats = queue.stats();
+    const stats = await queue.stats();
     expect(stats.completed).toBe(1);
     expect(stats.failed).toBe(1);
   });
 
-  it("should report correct stats", () => {
+  it("should report correct stats", async () => {
     const queue = new IngestionQueue({ concurrency: 5, maxSize: 10000 });
-    const stats = queue.stats();
+    const stats = await queue.stats();
 
     expect(stats.pending).toBe(0);
     expect(stats.active).toBe(0);

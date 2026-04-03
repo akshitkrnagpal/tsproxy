@@ -4,7 +4,7 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "types": ["node"],
-    "ignoreDeprecations": "6.0"
+    "ignoreDeprecations": "5.0"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "src/**/*.test.ts"]

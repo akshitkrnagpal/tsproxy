@@ -12,5 +12,14 @@ services:
       --enable-search-analytics=true
       --analytics-dir=/data/analytics
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+
 volumes:
   typesense-data:
+  redis-data:

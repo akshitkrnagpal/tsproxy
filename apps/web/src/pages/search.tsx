@@ -20,7 +20,7 @@ const INDEX_NAME = process.env.NEXT_PUBLIC_INDEX_NAME || "products";
 // --- Debounce helper ---
 
 function useDebouncedSearch(delay = 300) {
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   return useCallback(
     (query: string, search: (value: string) => void) => {
       clearTimeout(timerRef.current);
@@ -203,15 +203,15 @@ function Hit({ hit }: { hit: Record<string, unknown> }) {
         <h3 className="text-sm font-medium text-gray-900 line-clamp-2">
           {String(hit.name || hit.title || hit.objectID)}
         </h3>
-        {hit.brand && (
+        {hit.brand ? (
           <p className="mt-0.5 text-xs text-gray-500">{String(hit.brand)}</p>
-        )}
+        ) : null}
         <p className="mt-1 text-base font-bold text-gray-900">
           ${String(hit.price)}
         </p>
-        {hit.in_stock === false && (
+        {hit.in_stock === false ? (
           <p className="mt-0.5 text-xs text-red-500">Out of stock</p>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -249,7 +249,7 @@ export default function SearchPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <InstantSearch searchClient={searchClient} indexName={INDEX_NAME}>
+      <InstantSearch searchClient={searchClient as any} indexName={INDEX_NAME}>
         <header className="sticky top-0 z-10 border-b border-gray-200 bg-white px-6 py-4">
           <div className="mx-auto flex max-w-7xl items-center gap-6">
             <h1 className="text-xl font-bold text-gray-900">tsproxy</h1>
