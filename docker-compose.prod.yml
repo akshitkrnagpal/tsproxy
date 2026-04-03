@@ -1,0 +1,66 @@
+services:
+  typesense:
+    image: typesense/typesense:30.0
+    restart: unless-stopped
+    ports:
+      - "8108:8108"
+    volumes:
+      - typesense-data:/data
+    command: >
+      --data-dir /data
+      --api-key=${TYPESENSE_API_KEY:-changeme}
+      --enable-cors
+      --enable-search-analytics=true
+      --analytics-dir=/data/analytics
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8108/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${PROXY_PORT:-3000}:3000"
+    environment:
+      - TYPESENSE_HOST=typesense
+      - TYPESENSE_PORT=8108
+      - TYPESENSE_PROTOCOL=http
+      - TYPESENSE_API_KEY=${TYPESENSE_API_KEY:-changeme}
+      - PROXY_PORT=3000
+      - PROXY_API_KEY=${PROXY_API_KEY:-changeme}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CACHE_TTL=${CACHE_TTL:-60}
+      - CACHE_MAX_SIZE=${CACHE_MAX_SIZE:-1000}
+      - QUEUE_CONCURRENCY=${QUEUE_CONCURRENCY:-5}
+      - QUEUE_MAX_SIZE=${QUEUE_MAX_SIZE:-10000}
+    depends_on:
+      typesense:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  typesense-data:
+  redis-data:

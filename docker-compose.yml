@@ -1,3 +1,4 @@
+# Development compose — use docker-compose.prod.yml for production
 services:
   typesense:
     image: typesense/typesense:30.0

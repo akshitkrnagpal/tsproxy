@@ -94,15 +94,23 @@ export function createSearchRoutes(config: Config, collectionDefs?: Record<strin
     }
 
     // Check for Typesense-level errors in sub-results
-    const hasErrors = tsResponse.results.some(
-      (r) => "error" in r || ("found" === undefined && !("hits" in r))
-    );
+    const errors: string[] = [];
+    for (const result of tsResponse.results) {
+      if ("error" in result && (result as any).error) {
+        errors.push(String((result as any).error));
+      }
+    }
 
     // Transform response back to Algolia format
     const algoliaResponse = transformMultiSearchResponse(tsResponse, body.requests);
 
-    // Only cache successful responses with results
-    if (!hasErrors) {
+    // Surface errors to the client
+    if (errors.length > 0) {
+      (algoliaResponse as any)._errors = errors;
+    }
+
+    // Only cache successful responses
+    if (errors.length === 0) {
       cache.set(cacheKey, algoliaResponse);
     }
 
