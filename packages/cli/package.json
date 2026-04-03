@@ -1,11 +1,22 @@
 {
   "name": "@tsproxy/cli",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "CLI for tsproxy — Typesense search proxy framework",
   "type": "module",
   "bin": {
     "tsproxy": "./dist/index.js"
   },
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/akshitkrnagpal/tsproxy.git",
+    "directory": "packages/cli"
+  },
+  "license": "MIT",
+  "keywords": ["typesense", "search", "proxy", "cli"],
   "scripts": {
     "build": "tsup src/index.ts --format esm --target node22",
     "dev": "tsx src/index.ts"

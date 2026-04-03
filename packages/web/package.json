@@ -1,16 +1,27 @@
 {
   "name": "@tsproxy/react",
-  "version": "0.1.0",
-  "description": "React components for tsproxy (wraps InstantSearch)",
+  "version": "0.0.1",
+  "description": "Headless React components for tsproxy with BaseUI-style overrides",
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./src/index.ts",
-      "types": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
   },
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/akshitkrnagpal/tsproxy.git",
+    "directory": "packages/web"
+  },
+  "license": "MIT",
+  "keywords": ["typesense", "react", "instantsearch", "headless", "search"],
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts --external react --external react-dom --external react-instantsearch --external @tsproxy/js --tsconfig tsconfig.build.json",
     "typecheck": "tsc --noEmit"

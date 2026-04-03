@@ -1,16 +1,27 @@
 {
   "name": "@tsproxy/js",
-  "version": "0.1.0",
-  "description": "Framework-agnostic InstantSearch adapter for tsproxy",
+  "version": "0.0.1",
+  "description": "InstantSearch-compatible searchClient adapter for tsproxy",
   "type": "module",
-  "main": "./src/index.ts",
-  "types": "./src/index.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./src/index.ts",
-      "types": "./src/index.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
   },
+  "files": ["dist"],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/akshitkrnagpal/tsproxy.git",
+    "directory": "packages/js"
+  },
+  "license": "MIT",
+  "keywords": ["typesense", "instantsearch", "search", "proxy"],
   "scripts": {
     "build": "tsup src/index.ts --format esm --dts",
     "typecheck": "tsc --noEmit"
