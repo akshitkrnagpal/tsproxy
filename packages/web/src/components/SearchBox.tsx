@@ -1,7 +1,7 @@
 import { useSearchBox } from "react-instantsearch";
 import { getOverride } from "../overrides/getOverride";
 import type { Overrides } from "../overrides/types";
-import { type FormEvent, useRef } from "react";
+import { type FormEvent, useRef, useState, useEffect } from "react";
 
 type SearchBoxElements = {
   Root: "div";
@@ -27,6 +27,19 @@ export function SearchBox({
   const { query, refine, clear } = useSearchBox({ queryHook });
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Maintain local input value so typing feels instant even with debounce.
+  // Sync from the hook's query on mount and when external state changes
+  // (e.g. URL routing restores a query).
+  const [inputValue, setInputValue] = useState(query);
+  const isTypingRef = useRef(false);
+
+  useEffect(() => {
+    // Only sync from hook → local when user is not actively typing
+    if (!isTypingRef.current) {
+      setInputValue(query);
+    }
+  }, [query]);
+
   const root = getOverride("div", overrides?.Root);
   const form = getOverride("form", overrides?.Form);
   const input = getOverride("input", overrides?.Input);
@@ -38,8 +51,20 @@ export function SearchBox({
   };
 
   const handleReset = () => {
+    setInputValue("");
     clear();
     inputRef.current?.focus();
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.currentTarget.value;
+    setInputValue(value);
+    isTypingRef.current = true;
+    refine(value);
+    // Reset typing flag after debounce window
+    setTimeout(() => {
+      isTypingRef.current = false;
+    }, 500);
   };
 
   return (
@@ -57,9 +82,8 @@ export function SearchBox({
             type: "search",
             placeholder,
             autoFocus,
-            value: query,
-            onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-              refine(e.currentTarget.value),
+            value: inputValue,
+            onChange: handleChange,
             autoComplete: "off",
             autoCorrect: "off",
             spellCheck: false,
@@ -72,7 +96,7 @@ export function SearchBox({
           {...reset.resolveProps({
             type: "reset",
             onClick: handleReset,
-            hidden: !query,
+            hidden: !inputValue,
             children: "Reset",
           })}
         />

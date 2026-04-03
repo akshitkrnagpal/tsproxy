@@ -82,16 +82,29 @@ export function createSearchRoutes(config: Config, collectionDefs?: Record<strin
     });
 
     // Execute multi_search
-    const tsResponse = (await typesense.multiSearch.perform(
-      { searches },
-      {}
-    )) as TypesenseMultiSearchResponse;
+    let tsResponse: TypesenseMultiSearchResponse;
+    try {
+      tsResponse = (await typesense.multiSearch.perform(
+        { searches },
+        {}
+      )) as TypesenseMultiSearchResponse;
+    } catch (err) {
+      console.error("[search] Typesense request failed:", (err as Error).message);
+      return c.json({ error: "Search backend unavailable" }, 502);
+    }
+
+    // Check for Typesense-level errors in sub-results
+    const hasErrors = tsResponse.results.some(
+      (r) => "error" in r || ("found" === undefined && !("hits" in r))
+    );
 
     // Transform response back to Algolia format
     const algoliaResponse = transformMultiSearchResponse(tsResponse, body.requests);
 
-    // Cache the response
-    cache.set(cacheKey, algoliaResponse);
+    // Only cache successful responses with results
+    if (!hasErrors) {
+      cache.set(cacheKey, algoliaResponse);
+    }
 
     return c.json(algoliaResponse);
   });

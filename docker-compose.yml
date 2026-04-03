@@ -1,6 +1,7 @@
 services:
   typesense:
     image: typesense/typesense:30.0
+    restart: unless-stopped
     ports:
       - "8108:8108"
     volumes:
@@ -11,14 +12,25 @@ services:
       --enable-cors
       --enable-search-analytics=true
       --analytics-dir=/data/analytics
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8108/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
       - redis-data:/data
     command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 volumes:
   typesense-data:

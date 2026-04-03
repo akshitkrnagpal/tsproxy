@@ -366,8 +366,8 @@ export function transformTypesenseResponseToAlgolia(
   const hits = (tsResponse.hits ?? []).map(transformHit);
   const { facets, facets_stats } = transformFacets(tsResponse.facet_counts);
 
-  const nbHits = tsResponse.found;
-  const nbPages = Math.ceil(nbHits / hitsPerPage);
+  const nbHits = tsResponse.found ?? 0;
+  const nbPages = nbHits > 0 ? Math.ceil(nbHits / hitsPerPage) : 0;
 
   // Serialize params back to a string if it was an object
   const paramsString = typeof originalRequest.params === "string"

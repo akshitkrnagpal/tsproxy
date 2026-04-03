@@ -29,7 +29,7 @@ function SearchProviderInner({
 
   return (
     <InstantSearch
-      searchClient={searchClient as Parameters<typeof InstantSearch>[0]["searchClient"]}
+      searchClient={searchClient as any}
       indexName={indexName}
     >
       {children}
