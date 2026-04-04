@@ -1,4 +1,5 @@
 {
+  "cli": "@tsproxy/cli",
   "api": "@tsproxy/api",
   "js": "@tsproxy/js",
   "react": "@tsproxy/react"

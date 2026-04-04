@@ -3,48 +3,53 @@
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) v24+
-- [pnpm](https://pnpm.io/) v10+
-- [Docker](https://www.docker.com/) (for Typesense and Redis)
+- [Docker](https://www.docker.com/) (for local Typesense) or a [Typesense Cloud](https://cloud.typesense.org/) account
 
-## Installation
+## Create a Project
+
+Run the interactive setup:
 
 ```bash
-git clone https://github.com/akshitkrnagpal/tsproxy.git
-cd tsproxy
-pnpm install
+npx @tsproxy/cli init
 ```
+
+The CLI will ask:
+
+1. **What to set up** — Backend, Frontend, or Both
+2. **How you run Typesense** — Docker (local), Typesense Cloud, or Self-hosted
+3. **Persistent queue** — Redis for BullMQ (optional)
+4. **Frontend framework** — React or Vanilla JS
+
+This generates:
+
+- `tsproxy.config.ts` — proxy configuration
+- `docker-compose.yml` — Typesense + Redis (if Docker selected)
+- `.env` — connection details
+- Installs the right `@tsproxy/*` packages
 
 ## Start Infrastructure
 
-Start Typesense and Redis using Docker Compose:
+If you chose Docker:
 
 ```bash
 docker compose up -d
 ```
 
-This starts:
-- **Typesense** on port `8108` (search engine)
-- **Redis** on port `6379` (persistent queue backend)
-
-## Seed Sample Data
+## Start the Proxy
 
 ```bash
-pnpm seed
+npx tsproxy dev
 ```
 
-This creates a `products` collection with 15 sample products including names, descriptions, prices, categories, brands, colors, and ratings.
+The proxy starts on `http://localhost:3000` with:
+- Search API at `/api/search`
+- Ingest API at `/api/ingest/*`
+- Health check at `/api/health`
+- API docs at `/api/docs`
 
-For locale-specific collections:
+## Create Collections
 
-```bash
-pnpm seed -- --locales
-```
-
-This creates `products_en`, `products_fr`, and `products_de` alongside the base collection.
-
-## Configuration
-
-Create a `tsproxy.config.ts` in your project root:
+Define your collections in `tsproxy.config.ts`:
 
 ```ts
 import { defineConfig } from "@tsproxy/api";
@@ -53,20 +58,12 @@ export default defineConfig({
   typesense: {
     host: "localhost",
     port: 8108,
-    protocol: "http",
-    apiKey: "your-api-key",
+    apiKey: process.env.TYPESENSE_API_KEY || "your-key",
   },
   server: {
     port: 3000,
-    apiKey: "your-ingest-secret",
+    apiKey: process.env.PROXY_API_KEY || "your-ingest-secret",
   },
-  cache: { ttl: 60, maxSize: 1000 },
-  queue: {
-    concurrency: 5,
-    maxSize: 10000,
-    redis: { host: "localhost", port: 6379 },
-  },
-  rateLimit: { search: 100, ingest: 30 },
   collections: {
     products: {
       fields: {
@@ -81,20 +78,85 @@ export default defineConfig({
 });
 ```
 
-## Start Development
+Then sync the schema to Typesense:
 
 ```bash
-pnpm dev
+npx tsproxy migrate --apply
 ```
 
-This starts:
-- **Proxy API** on `http://localhost:3000`
-- **Demo app** on `http://localhost:3001`
-- **Docs** on `http://localhost:3002` (if running)
+## Seed Data
+
+Create a `products.json` file with your data:
+
+```json
+[
+  { "id": "1", "name": "Wireless Mouse", "price": 39.99, "category": "Electronics", "brand": "KeyCraft" },
+  { "id": "2", "name": "Yoga Mat", "price": 29.99, "category": "Fitness", "brand": "ZenFlow" }
+]
+```
+
+Seed via the ingest API (applies computed fields, uses the queue):
+
+```bash
+npx tsproxy seed products.json --collection products
+```
+
+## Add Search to Your App
+
+### React
+
+```bash
+npm install @tsproxy/js @tsproxy/react react-instantsearch
+```
+
+```tsx
+import { SearchProvider, SearchBox, Hits, RefinementList } from "@tsproxy/react";
+import { Configure } from "react-instantsearch";
+
+export default function SearchPage() {
+  return (
+    <SearchProvider serverUrl="http://localhost:3000" indexName="products">
+      <Configure hitsPerPage={12} />
+      <SearchBox placeholder="Search..." />
+      <RefinementList attribute="category" />
+      <Hits hitComponent={({ hit }) => <div>{hit.name}</div>} />
+    </SearchProvider>
+  );
+}
+```
+
+### Vanilla JS
+
+```bash
+npm install @tsproxy/js
+```
+
+```ts
+import { createSearchClient } from "@tsproxy/js";
+
+const client = createSearchClient({ url: "http://localhost:3000" });
+const results = await client.search([
+  { indexName: "products", params: { query: "mouse", hitsPerPage: 10 } },
+]);
+```
+
+## Check Health
+
+```bash
+npx tsproxy health
+```
+
+```
+  ✓ Proxy        ok
+  ✓ Typesense    ok  http://localhost:8108
+  ✓ Redis        ok  localhost:6379
+
+  Status: healthy
+```
 
 ## Environment Variables
 
-You can also configure via environment variables instead of a config file:
+All settings from `tsproxy.config.ts` can be overridden via env vars:
 
 | Variable | Default | Description |
 |----------|---------|-------------|

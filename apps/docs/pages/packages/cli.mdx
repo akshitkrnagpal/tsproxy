@@ -1,0 +1,110 @@
+# @tsproxy/cli
+
+The CLI for tsproxy. Handles project setup, development, schema migration, seeding, and health checks.
+
+## Install
+
+```bash
+npm install -g @tsproxy/cli
+# or use with npx:
+npx @tsproxy/cli <command>
+```
+
+## Commands
+
+### `tsproxy init`
+
+Interactive project setup. Asks about your Typesense setup, queue backend, and frontend framework, then generates config files and installs dependencies.
+
+```bash
+npx @tsproxy/cli init
+```
+
+**Generates:**
+- `tsproxy.config.ts` — proxy config with `defineConfig`
+- `docker-compose.yml` — Typesense + Redis (if Docker selected)
+- `.env` — connection details
+
+### `tsproxy dev`
+
+Start the proxy in development mode with hot reload.
+
+```bash
+npx tsproxy dev
+npx tsproxy dev --port 4000
+npx tsproxy dev --config ./custom.config.ts
+```
+
+### `tsproxy start`
+
+Start the proxy in production mode (requires `tsproxy build` first).
+
+```bash
+npx tsproxy start
+```
+
+### `tsproxy build`
+
+Build the proxy for production deployment.
+
+```bash
+npx tsproxy build
+```
+
+### `tsproxy seed <file>`
+
+Seed Typesense with data from a JSON or JSONL file. Data goes through the ingest API, so computed fields are applied and the queue is used.
+
+```bash
+npx tsproxy seed products.json --collection products
+npx tsproxy seed products.json --collection products --locale en
+```
+
+**Options:**
+- `--collection <name>` — target collection (default: products)
+- `--locale <locale>` — locale for collection routing
+
+### `tsproxy migrate`
+
+Sync Typesense schema with your `tsproxy.config.ts`. Shows a diff of what will change.
+
+```bash
+# Dry run (default)
+npx tsproxy migrate
+
+# Apply changes
+npx tsproxy migrate --apply
+
+# Drop and recreate
+npx tsproxy migrate --apply --drop
+```
+
+**Output:**
+```
+Migration plan:
+
+  + products — Create with 5 fields
+  + products_en — Create with 5 fields
+  ✓ products_fr — Up to date
+
+Dry run — 2 change(s). Run with --apply to execute.
+```
+
+### `tsproxy health`
+
+Check Typesense and Redis connectivity.
+
+```bash
+npx tsproxy health
+```
+
+**Output:**
+```
+Health check
+
+  ✓ Proxy        ok
+  ✓ Typesense    ok  http://localhost:8108
+  ✓ Redis        ok  localhost:6379
+
+  Status: healthy
+```
