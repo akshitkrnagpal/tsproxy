@@ -64,6 +64,8 @@ collections: {
     tokenSeparators?: string[];
     symbolsToIndex?: string[];
     enableNestedFields?: boolean;
+    synonyms?: Record<string, SynonymDefinition>;
+    curations?: Record<string, CurationDefinition>;
   }
 }
 ```
@@ -80,3 +82,34 @@ collections: {
 | `locale` | `string` | Stemming locale |
 | `infix` | `boolean` | Enable infix search |
 | `compute` | `(doc, locale?) => value` | Computed field transform |
+
+### Synonyms
+
+Define synonyms in your collection config. Applied via `tsproxy migrate --apply`.
+
+```ts
+synonyms: {
+  "laptop-notebook": {
+    synonyms: ["laptop", "notebook", "portable computer"],
+  },
+  "phone-to-mobile": {
+    root: "phone",
+    words: ["mobile", "cell", "smartphone"],
+  },
+}
+```
+
+### Curations
+
+Pin or hide documents for specific queries. Applied via `tsproxy migrate --apply`.
+
+```ts
+curations: {
+  "featured-headphones": {
+    query: "headphones",
+    match: "exact",
+    pinnedIds: ["1", "9"],
+    hiddenIds: ["7"],
+  },
+}
+```

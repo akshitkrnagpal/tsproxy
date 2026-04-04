@@ -25,6 +25,10 @@ HonoJS proxy server for Typesense with caching, rate limiting, and an ingestion 
 | `DELETE` | `/api/ingest/:collection/documents/:id` | Yes | Delete document |
 | `DELETE` | `/api/ingest/:collection/documents` | Yes | Delete by filter |
 | `GET` | `/api/ingest/queue/status` | Yes | Queue stats |
+| `GET` | `/api/suggestions` | No | Query suggestions (autocomplete) |
+| `POST` | `/api/analytics/click` | No | Track search click event |
+| `POST` | `/api/analytics/conversion` | No | Track conversion event |
+| `GET` | `/api/analytics/popular` | No | Popular queries |
 
 ## Config File
 

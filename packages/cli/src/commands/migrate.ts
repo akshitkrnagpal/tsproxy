@@ -203,6 +203,78 @@ export async function migrate(opts: { apply?: boolean; drop?: boolean }) {
     }
   }
 
+  // Sync synonyms and curations
+  for (const [name, def] of Object.entries(collections) as [string, any][]) {
+    const names = [name];
+    if (def.locales?.length) {
+      for (const locale of def.locales) {
+        names.push(`${name}_${locale}`);
+      }
+    }
+
+    for (const colName of names) {
+      // Synonyms
+      if (def.synonyms) {
+        for (const [synName, synDef] of Object.entries(def.synonyms) as [string, any][]) {
+          try {
+            const body: any = {};
+            if (synDef.synonyms) {
+              body.synonyms = synDef.synonyms;
+            } else if (synDef.root && synDef.words) {
+              body.root = synDef.root;
+              body.synonyms = synDef.words;
+            }
+            await fetch(`${baseUrl}/collections/${colName}/synonyms/${synName}`, {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                "X-TYPESENSE-API-KEY": tsApiKey,
+              },
+              body: JSON.stringify(body),
+            });
+            console.log(`  ${pc.green("✓")} ${colName}/synonyms/${synName}`);
+          } catch (err) {
+            console.error(`  ${pc.red("✗")} ${colName}/synonyms/${synName} — ${(err as Error).message}`);
+          }
+        }
+      }
+
+      // Curations (overrides)
+      if (def.curations) {
+        for (const [curName, curDef] of Object.entries(def.curations) as [string, any][]) {
+          try {
+            const body: any = {
+              rule: {
+                query: curDef.query,
+                match: curDef.match || "exact",
+              },
+            };
+            if (curDef.pinnedIds?.length) {
+              body.includes = curDef.pinnedIds.map((id: string, i: number) => ({
+                id,
+                position: i + 1,
+              }));
+            }
+            if (curDef.hiddenIds?.length) {
+              body.excludes = curDef.hiddenIds.map((id: string) => ({ id }));
+            }
+            await fetch(`${baseUrl}/collections/${colName}/overrides/${curName}`, {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                "X-TYPESENSE-API-KEY": tsApiKey,
+              },
+              body: JSON.stringify(body),
+            });
+            console.log(`  ${pc.green("✓")} ${colName}/overrides/${curName}`);
+          } catch (err) {
+            console.error(`  ${pc.red("✗")} ${colName}/overrides/${curName} — ${(err as Error).message}`);
+          }
+        }
+      }
+    }
+  }
+
   console.log(pc.green("\nMigration complete."));
 }
 

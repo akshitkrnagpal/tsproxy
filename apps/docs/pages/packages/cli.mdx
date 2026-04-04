@@ -90,6 +90,22 @@ Migration plan:
 Dry run — 2 change(s). Run with --apply to execute.
 ```
 
+### `tsproxy generate`
+
+Generate `tsproxy.config.ts` from an existing Typesense schema. Connects to Typesense, fetches collections, and scaffolds a config with correct field types.
+
+```bash
+npx tsproxy generate
+npx tsproxy generate --host xyz.a1.typesense.net --port 443 --key your-key
+npx tsproxy generate -o custom-config.ts
+```
+
+**Options:**
+- `--host <host>` — Typesense host
+- `--port <port>` — Typesense port
+- `--key <key>` — Typesense API key
+- `-o, --output <path>` — Output file path (default: tsproxy.config.ts)
+
 ### `tsproxy health`
 
 Check Typesense and Redis connectivity.

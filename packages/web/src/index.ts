@@ -27,3 +27,4 @@ export { SortBy, type SortByProps, type SortByElements, type SortByItem } from "
 export { LocaleSelector, type LocaleSelectorProps, type LocaleSelectorElements, type LocaleOption } from "./components/LocaleSelector";
 export { NoResults, type NoResultsProps, type NoResultsElements } from "./components/NoResults";
 export { HitsSkeleton, type HitsSkeletonProps, type HitsSkeletonElements } from "./components/HitsSkeleton";
+export { Autocomplete, type AutocompleteProps, type AutocompleteElements, type Suggestion } from "./components/Autocomplete";

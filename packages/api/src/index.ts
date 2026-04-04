@@ -55,6 +55,8 @@ export {
   type ProxyConfig,
   type CollectionDefinition,
   type FieldConfig,
+  type SynonymDefinition,
+  type CurationDefinition,
 } from "./proxy-config.js";
 export { LRUCache, type CacheStats } from "./lib/cache.js";
 export { IngestionQueue, type QueueStats } from "./lib/queue.js";

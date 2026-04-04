@@ -91,6 +91,26 @@ Sub-elements: `Root`, `Select`, `Option`
 />
 ```
 
+### Autocomplete
+
+Sub-elements: `Root`, `Input`, `List`, `Item`, `Highlight`
+
+Standalone autocomplete that calls the `/api/suggestions` endpoint. Works outside of InstantSearch.
+
+```tsx
+<Autocomplete
+  serverUrl="http://localhost:3000"
+  collection="products"
+  placeholder="Search products..."
+  onSelect={(suggestion) => console.log(suggestion)}
+  overrides={{
+    Input: { props: { className: "w-full border rounded px-3 py-2" } },
+    List: { props: { className: "absolute bg-white border rounded shadow mt-1 w-full" } },
+    Item: { props: { className: "px-3 py-2 hover:bg-gray-100 cursor-pointer" } },
+  }}
+/>
+```
+
 ### NoResults
 
 Sub-elements: `Root`, `Title`, `Message`

@@ -42,6 +42,26 @@ export interface FieldConfig {
 /**
  * Collection definition in the proxy config
  */
+export interface SynonymDefinition {
+  /** Synonym words — all are interchangeable */
+  synonyms?: string[];
+  /** One-way: root word */
+  root?: string;
+  /** One-way: words that map to the root */
+  words?: string[];
+}
+
+export interface CurationDefinition {
+  /** Query to match */
+  query: string;
+  /** Match type: exact or contains */
+  match?: "exact" | "contains";
+  /** Document IDs to pin to the top */
+  pinnedIds?: string[];
+  /** Document IDs to hide from results */
+  hiddenIds?: string[];
+}
+
 export interface CollectionDefinition {
   /** Field definitions */
   fields: Record<string, FieldConfig>;
@@ -55,6 +75,10 @@ export interface CollectionDefinition {
   symbolsToIndex?: string[];
   /** Enable nested fields */
   enableNestedFields?: boolean;
+  /** Synonym definitions */
+  synonyms?: Record<string, SynonymDefinition>;
+  /** Curation/pinning rules */
+  curations?: Record<string, CurationDefinition>;
 }
 
 /**

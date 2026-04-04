@@ -6,7 +6,10 @@
   "bin": {
     "tsproxy": "./dist/index.js"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -16,10 +19,16 @@
     "directory": "packages/cli"
   },
   "license": "MIT",
-  "keywords": ["typesense", "search", "proxy", "cli"],
+  "keywords": [
+    "typesense",
+    "search",
+    "proxy",
+    "cli"
+  ],
   "scripts": {
     "build": "tsup src/index.ts --format esm --target node22",
-    "dev": "tsx src/index.ts"
+    "dev": "tsx src/index.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@clack/prompts": "^0.10.0",
@@ -30,6 +39,7 @@
     "@types/node": "^20",
     "tsup": "^8.4.0",
     "tsx": "^4.19.0",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   }
 }
