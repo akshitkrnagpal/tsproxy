@@ -267,6 +267,29 @@ export function transformAlgoliaRequestToTypesense(
     result.sort_by = params["sortBy"];
   }
 
+  // Geo search: aroundLatLng + aroundRadius
+  if (params["aroundLatLng"]) {
+    const geo = params["aroundLatLng"];
+    const radius = params["aroundRadius"] || "10000"; // meters
+    const geoField = params["geoField"] || "_geoloc";
+    const [lat, lng] = geo.split(",").map((s: string) => s.trim());
+    if (lat && lng) {
+      const existing = result.filter_by ? `${result.filter_by} && ` : "";
+      result.filter_by = `${existing}${geoField}:(${lat}, ${lng}, ${radius} m)`;
+      if (!result.sort_by) {
+        result.sort_by = `${geoField}(${lat}, ${lng}):asc`;
+      }
+    }
+  }
+
+  // Group by
+  if (params["groupBy"]) {
+    result.group_by = params["groupBy"];
+    if (params["groupLimit"]) {
+      result.group_limit = parseInt(params["groupLimit"], 10);
+    }
+  }
+
   return result;
 }
 

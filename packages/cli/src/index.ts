@@ -8,6 +8,7 @@ import { build } from "./commands/build.js";
 import { seed } from "./commands/seed.js";
 import { migrate } from "./commands/migrate.js";
 import { health } from "./commands/health.js";
+import { generate } from "./commands/generate.js";
 
 const program = new Command();
 
@@ -59,5 +60,14 @@ program
   .command("health")
   .description("Check Typesense and Redis connectivity")
   .action(health);
+
+program
+  .command("generate")
+  .description("Generate tsproxy.config.ts from existing Typesense schema")
+  .option("--host <host>", "Typesense host")
+  .option("--port <port>", "Typesense port")
+  .option("--key <key>", "Typesense API key")
+  .option("-o, --output <path>", "Output file path", "tsproxy.config.ts")
+  .action(generate);
 
 program.parse();
