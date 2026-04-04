@@ -15,7 +15,7 @@
   "bin": {
     "tsproxy-server": "./dist/cli.js"
   },
-  "files": ["dist"],
+  "files": ["dist", "README.md"],
   "publishConfig": {
     "access": "public"
   },
