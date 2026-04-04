@@ -23,7 +23,7 @@
   "license": "MIT",
   "keywords": ["typesense", "react", "instantsearch", "headless", "search"],
   "scripts": {
-    "build": "tsup src/index.ts --format esm --external react --external react-dom --external react-instantsearch --external @tsproxy/js && tsc --emitDeclarationOnly --declaration --outDir dist --skipLibCheck",
+    "build": "tsup",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
