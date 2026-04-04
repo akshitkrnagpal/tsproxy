@@ -7,6 +7,8 @@ import { createSearchRoutes } from "./routes/search.js";
 import { createIngestRoutes } from "./routes/ingest.js";
 import { createHealthRoutes } from "./routes/health.js";
 import { createDocsRoutes } from "./routes/docs.js";
+import { createSuggestionsRoutes } from "./routes/suggestions.js";
+import { createAnalyticsRoutes } from "./routes/analytics.js";
 import type { CollectionDefinition } from "./proxy-config.js";
 
 export function createApp(config?: Config, collectionDefs?: Record<string, CollectionDefinition>) {
@@ -25,11 +27,15 @@ export function createApp(config?: Config, collectionDefs?: Record<string, Colle
   const { app: ingestApp, queue: ingestQueue } = createIngestRoutes(cfg, collectionDefs);
   const healthApp = createHealthRoutes(cfg);
   const docsApp = createDocsRoutes();
+  const suggestionsApp = createSuggestionsRoutes(cfg, collectionDefs);
+  const analyticsApp = createAnalyticsRoutes(cfg);
 
   app.route("/", searchApp);
   app.route("/", ingestApp);
   app.route("/", healthApp);
   app.route("/", docsApp);
+  app.route("/", suggestionsApp);
+  app.route("/", analyticsApp);
 
   return { app, config: cfg, searchCache, ingestQueue };
 }
