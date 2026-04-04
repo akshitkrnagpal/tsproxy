@@ -40,6 +40,7 @@ jobs:
             echo "Waiting for Typesense... ($i)"
             sleep 2
           done
+      - run: pnpm build
       - run: pnpm test
       - name: Stop Typesense
         if: always()
