@@ -1,0 +1,30 @@
+# tsproxy
+
+> A search proxy framework for Typesense with caching, rate limiting, a BullMQ ingestion queue, and headless React components.
+
+tsproxy sits between your frontend and Typesense, providing API key protection, LRU caching, per-IP rate limiting, a queued ingestion pipeline, and InstantSearch-compatible search endpoints. It includes a CLI for project setup, schema migration, and data seeding, a JS adapter for InstantSearch, and headless React components with a BaseUI-style overrides pattern.
+
+## Packages
+
+- [@tsproxy/cli](https://tsproxy.akshit.io/packages/cli): CLI for project setup, dev server, schema migration, seeding, and health checks
+- [@tsproxy/api](https://tsproxy.akshit.io/packages/api): HonoJS proxy server with search, ingest, caching, and rate limiting
+- [@tsproxy/js](https://tsproxy.akshit.io/packages/js): InstantSearch-compatible searchClient adapter
+- [@tsproxy/react](https://tsproxy.akshit.io/packages/react): Headless React components with overrides pattern
+
+## Documentation
+
+- [Introduction](https://tsproxy.akshit.io): Overview, architecture, and quick start
+- [Getting Started](https://tsproxy.akshit.io/getting-started): Prerequisites, project setup, and first search
+- [Search Integration](https://tsproxy.akshit.io/guides/search): React + InstantSearch, Vanilla JS, and direct API usage
+- [Ingestion API](https://tsproxy.akshit.io/guides/ingest): Upsert, bulk import, computed fields, and queue backend
+- [Server-Side Rendering](https://tsproxy.akshit.io/guides/ssr): Next.js SSR with getServerState and URL sync
+- [Multilingual Search](https://tsproxy.akshit.io/guides/multilingual): Locale-aware collections and computed fields
+- [Production Deployment](https://tsproxy.akshit.io/guides/deployment): Docker Compose, standalone deployment, and scaling
+- [Configuration Reference](https://tsproxy.akshit.io/api-reference/config): Full tsproxy.config.ts reference
+- [Search API Reference](https://tsproxy.akshit.io/api-reference/search): POST /api/search endpoint
+- [Ingest API Reference](https://tsproxy.akshit.io/api-reference/ingest): Ingest endpoints and authentication
+- [Health API Reference](https://tsproxy.akshit.io/api-reference/health): GET /api/health endpoint
+
+## Optional
+
+- [GitHub Repository](https://github.com/akshitkrnagpal/tsproxy)

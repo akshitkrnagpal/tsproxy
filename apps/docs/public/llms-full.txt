@@ -1,0 +1,1571 @@
+# tsproxy
+
+> A search proxy framework for Typesense with caching, rate limiting, a BullMQ ingestion queue, and headless React components.
+
+tsproxy sits between your frontend and Typesense, providing API key protection, LRU caching, per-IP rate limiting, a queued ingestion pipeline, and InstantSearch-compatible search endpoints.
+
+## Why tsproxy?
+
+Typesense is a fast, typo-tolerant search engine. But exposing it directly to frontend clients creates challenges:
+
+- **API key exposure** -- Typesense search-only keys still reveal your cluster details
+- **No caching layer** -- every keystroke hits your search cluster
+- **No rate limiting** -- bad actors can overwhelm your search backend
+- **No ingestion queue** -- bulk writes can spike resource usage
+- **InstantSearch compatibility** -- Typesense needs a translation layer for InstantSearch widgets
+
+tsproxy solves all of these with a single proxy server and CLI.
+
+## Architecture
+
+```
+Frontend (React)          tsproxy API           Typesense
++------------------+     +------------------+    +----------+
+| @tsproxy/react   |---->| HonoJS Proxy     |--->| Typesense|
+| @tsproxy/js      |     | - LRU Cache      |    | Server   |
+| InstantSearch    |<----| - Rate Limiting  |<---|          |
++------------------+     | - BullMQ Queue   |    +----------+
+                         | - Transform      |
+                         +------------------+
+```
+
+## Packages
+
+| Package | Description |
+|---------|-------------|
+| `@tsproxy/cli` | CLI -- `init`, `dev`, `start`, `migrate`, `seed`, `health` |
+| `@tsproxy/api` | HonoJS proxy server with search, ingest, caching, rate limiting |
+| `@tsproxy/js` | InstantSearch-compatible `searchClient` adapter |
+| `@tsproxy/react` | Headless React components with BaseUI-style overrides |
+
+## CLI Commands
+
+```bash
+tsproxy init         # Interactive project setup
+tsproxy dev          # Start proxy in dev mode (hot reload)
+tsproxy start        # Start proxy in production mode
+tsproxy build        # Build for production
+tsproxy seed <file>  # Seed data via the ingest API
+tsproxy migrate      # Sync Typesense schema with config
+tsproxy health       # Check Typesense + Redis status
+```
+
+---
+
+# Getting Started
+
+## Prerequisites
+
+- Node.js v24+
+- Docker (for local Typesense) or a Typesense Cloud account
+
+## Create a Project
+
+Run the interactive setup:
+
+```bash
+npx @tsproxy/cli init
+```
+
+The CLI will ask:
+
+1. **What to set up** -- Backend, Frontend, or Both
+2. **How you run Typesense** -- Docker (local), Typesense Cloud, or Self-hosted
+3. **Persistent queue** -- Redis for BullMQ (optional)
+4. **Frontend framework** -- React or Vanilla JS
+
+This generates:
+
+- `tsproxy.config.ts` -- proxy configuration
+- `docker-compose.yml` -- Typesense + Redis (if Docker selected)
+- `.env` -- connection details
+- Installs the right `@tsproxy/*` packages
+
+## Start Infrastructure
+
+If you chose Docker:
+
+```bash
+docker compose up -d
+```
+
+## Start the Proxy
+
+```bash
+npx tsproxy dev
+```
+
+The proxy starts on `http://localhost:3000` with:
+- Search API at `/api/search`
+- Ingest API at `/api/ingest/*`
+- Health check at `/api/health`
+- API docs at `/api/docs`
+
+## Create Collections
+
+Define your collections in `tsproxy.config.ts`:
+
+```ts
+import { defineConfig } from "@tsproxy/api";
+
+export default defineConfig({
+  typesense: {
+    host: "localhost",
+    port: 8108,
+    apiKey: process.env.TYPESENSE_API_KEY || "your-key",
+  },
+  server: {
+    port: 3000,
+    apiKey: process.env.PROXY_API_KEY || "your-ingest-secret",
+  },
+  collections: {
+    products: {
+      fields: {
+        name: { type: "string", searchable: true },
+        description: { type: "string", searchable: true, optional: true },
+        price: { type: "float", sortable: true },
+        category: { type: "string", facet: true },
+        brand: { type: "string", facet: true },
+      },
+    },
+  },
+});
+```
+
+Then sync the schema to Typesense:
+
+```bash
+npx tsproxy migrate --apply
+```
+
+## Seed Data
+
+Create a `products.json` file with your data:
+
+```json
+[
+  { "id": "1", "name": "Wireless Mouse", "price": 39.99, "category": "Electronics", "brand": "KeyCraft" },
+  { "id": "2", "name": "Yoga Mat", "price": 29.99, "category": "Fitness", "brand": "ZenFlow" }
+]
+```
+
+Seed via the ingest API (applies computed fields, uses the queue):
+
+```bash
+npx tsproxy seed products.json --collection products
+```
+
+## Add Search to Your App
+
+### React
+
+```bash
+npm install @tsproxy/js @tsproxy/react react-instantsearch
+```
+
+```tsx
+import { SearchProvider, SearchBox, Hits, RefinementList } from "@tsproxy/react";
+import { Configure } from "react-instantsearch";
+
+export default function SearchPage() {
+  return (
+    <SearchProvider serverUrl="http://localhost:3000" indexName="products">
+      <Configure hitsPerPage={12} />
+      <SearchBox placeholder="Search..." />
+      <RefinementList attribute="category" />
+      <Hits hitComponent={({ hit }) => <div>{hit.name}</div>} />
+    </SearchProvider>
+  );
+}
+```
+
+### Vanilla JS
+
+```bash
+npm install @tsproxy/js
+```
+
+```ts
+import { createSearchClient } from "@tsproxy/js";
+
+const client = createSearchClient({ url: "http://localhost:3000" });
+const results = await client.search([
+  { indexName: "products", params: { query: "mouse", hitsPerPage: 10 } },
+]);
+```
+
+## Check Health
+
+```bash
+npx tsproxy health
+```
+
+```
+  + Proxy        ok
+  + Typesense    ok  http://localhost:8108
+  + Redis        ok  localhost:6379
+
+  Status: healthy
+```
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `TYPESENSE_HOST` | `localhost` | Typesense host |
+| `TYPESENSE_PORT` | `8108` | Typesense port |
+| `TYPESENSE_API_KEY` | -- | Typesense API key (required) |
+| `PROXY_PORT` | `3000` | Proxy server port |
+| `PROXY_API_KEY` | -- | API key for ingest endpoints |
+| `REDIS_HOST` | -- | Redis host (enables BullMQ queue) |
+| `REDIS_PORT` | `6379` | Redis port |
+| `CACHE_TTL` | `60` | Cache TTL in seconds |
+| `CACHE_MAX_SIZE` | `1000` | Max cached entries |
+| `RATE_LIMIT_SEARCH` | `100` | Search requests/min per IP |
+| `RATE_LIMIT_INGEST` | `30` | Ingest requests/min per IP |
+
+---
+
+# Search Integration
+
+## Using with React + InstantSearch
+
+The recommended way to add search to your React app is using `@tsproxy/react` components with `react-instantsearch`.
+
+### Install
+
+```bash
+npm install @tsproxy/js @tsproxy/react react-instantsearch
+```
+
+### Basic Setup
+
+```tsx
+import { useMemo } from "react";
+import { InstantSearch, Configure } from "react-instantsearch";
+import { createSearchClient } from "@tsproxy/js";
+import { SearchBox, Hits, RefinementList, Pagination, Stats } from "@tsproxy/react";
+
+export default function SearchPage() {
+  const searchClient = useMemo(
+    () => createSearchClient({ url: "http://localhost:3000" }),
+    [],
+  );
+
+  return (
+    <InstantSearch searchClient={searchClient} indexName="products">
+      <Configure hitsPerPage={12} />
+      <SearchBox placeholder="Search..." />
+      <Stats />
+      <RefinementList attribute="category" />
+      <Hits hitComponent={({ hit }) => <div>{hit.name}</div>} />
+      <Pagination />
+    </InstantSearch>
+  );
+}
+```
+
+### Overrides Pattern
+
+Every `@tsproxy/react` component accepts an `overrides` prop to customize or replace any sub-element:
+
+```tsx
+<SearchBox
+  overrides={{
+    Input: {
+      props: { className: "rounded-full border px-4 py-2" },
+    },
+    SubmitButton: { props: { hidden: true } },
+    ResetButton: {
+      component: ({ onClick, hidden }) => (
+        <button onClick={onClick} hidden={hidden}>Clear</button>
+      ),
+    },
+  }}
+/>
+```
+
+Each override accepts:
+- **`props`** -- merge additional props (object or function `(defaultProps) => overrideProps`)
+- **`component`** -- replace the sub-element entirely with a custom component
+
+### Debounced Search
+
+Use `queryHook` to debounce search requests:
+
+```tsx
+import { useRef, useCallback } from "react";
+
+function useDebouncedSearch(delay = 300) {
+  const timerRef = useRef(undefined);
+  return useCallback(
+    (query, search) => {
+      clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => search(query), delay);
+    },
+    [delay],
+  );
+}
+
+// In your component:
+const debouncedSearch = useDebouncedSearch(300);
+<SearchBox queryHook={debouncedSearch} />
+```
+
+## Using with Vanilla JS
+
+```ts
+import { createSearchClient } from "@tsproxy/js";
+
+const client = createSearchClient({ url: "http://localhost:3000" });
+
+const results = await client.search([
+  {
+    indexName: "products",
+    params: { query: "keyboard", hitsPerPage: 10, page: 0 },
+  },
+]);
+
+console.log(results.results[0].hits);
+```
+
+## Direct API Calls
+
+```bash
+curl -X POST http://localhost:3000/api/search \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requests": [{
+      "indexName": "products",
+      "params": {
+        "query": "keyboard",
+        "hitsPerPage": 12,
+        "page": 0,
+        "facets": ["category", "brand"]
+      }
+    }]
+  }'
+```
+
+---
+
+# Ingestion API
+
+All ingest endpoints require the `X-API-Key` header set to your `PROXY_API_KEY`.
+
+## Upsert a Document
+
+```bash
+curl -X POST http://localhost:3000/api/ingest/products/documents \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-secret-key" \
+  -d '{
+    "id": "100",
+    "name": "New Product",
+    "price": 49.99,
+    "category": "Electronics",
+    "brand": "TestBrand",
+    "in_stock": true,
+    "rating": 4.0,
+    "created_at": 1700000000
+  }'
+```
+
+## Bulk Import
+
+```bash
+curl -X POST http://localhost:3000/api/ingest/products/documents/import \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-secret-key" \
+  -d '[
+    { "id": "101", "name": "Product A", "price": 19.99 },
+    { "id": "102", "name": "Product B", "price": 29.99 }
+  ]'
+```
+
+## Update a Document
+
+```bash
+curl -X PATCH http://localhost:3000/api/ingest/products/documents/100 \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-secret-key" \
+  -d '{ "price": 39.99 }'
+```
+
+## Delete a Document
+
+```bash
+curl -X DELETE http://localhost:3000/api/ingest/products/documents/100 \
+  -H "X-API-Key: your-secret-key"
+```
+
+## Delete by Filter
+
+```bash
+curl -X DELETE "http://localhost:3000/api/ingest/products/documents?filter_by=in_stock:false" \
+  -H "X-API-Key: your-secret-key"
+```
+
+## Queue Status
+
+```bash
+curl http://localhost:3000/api/ingest/queue/status \
+  -H "X-API-Key: your-secret-key"
+```
+
+Response:
+
+```json
+{
+  "pending": 0,
+  "active": 0,
+  "completed": 42,
+  "failed": 0,
+  "maxSize": 10000,
+  "concurrency": 5,
+  "backend": "redis"
+}
+```
+
+## Computed Fields
+
+If your `tsproxy.config.ts` defines computed fields, they are automatically applied during ingestion:
+
+```ts
+collections: {
+  products: {
+    fields: {
+      color: { type: "string", facet: true },
+      category: { type: "string", facet: true },
+      category_page_slug: {
+        type: "string",
+        facet: true,
+        compute: (doc) => {
+          const color = String(doc.color || "").toLowerCase();
+          const category = String(doc.category || "").toLowerCase();
+          return `${color}-${category}`.replace(/\s+/g, "-");
+        },
+      },
+    },
+  },
+}
+```
+
+When you ingest `{ color: "Red", category: "Electronics" }`, the document is stored with `category_page_slug: "red-electronics"`.
+
+## Queue Backend
+
+The ingestion queue uses BullMQ + Redis when Redis is configured, with automatic fallback to an in-memory queue.
+
+Redis-backed queue benefits:
+- Jobs survive server restarts
+- Distributed processing across multiple proxy instances
+- Job retry and failure tracking
+
+---
+
+# Server-Side Rendering
+
+tsproxy supports full SSR with Next.js using `react-instantsearch`'s `getServerState` and `InstantSearchSSRProvider`.
+
+## How It Works
+
+1. `getServerSideProps` calls `getServerState()` which renders the search UI on the server
+2. The proxy API executes the search and returns results
+3. The HTML includes the rendered product grid -- no JavaScript needed for first paint
+4. `InstantSearchSSRProvider` hydrates the client with the server state
+
+## Next.js Pages Router
+
+```tsx
+import { InstantSearch, InstantSearchSSRProvider, getServerState } from "react-instantsearch";
+import { renderToString } from "react-dom/server";
+import { createSearchClient } from "@tsproxy/js";
+import type { GetServerSideProps } from "next";
+
+const API_URL = "http://localhost:3000";
+
+function SearchApp() {
+  const searchClient = useMemo(
+    () => createSearchClient({ url: API_URL }),
+    [],
+  );
+
+  return (
+    <InstantSearch searchClient={searchClient} indexName="products">
+      {/* Your search components */}
+    </InstantSearch>
+  );
+}
+
+export const getServerSideProps: GetServerSideProps = async () => {
+  const serverState = await getServerState(<SearchApp />, { renderToString });
+
+  return {
+    props: {
+      serverState: JSON.parse(JSON.stringify(serverState)),
+    },
+  };
+};
+
+export default function SearchPage({ serverState }) {
+  return (
+    <InstantSearchSSRProvider {...serverState}>
+      <SearchApp />
+    </InstantSearchSSRProvider>
+  );
+}
+```
+
+## URL Sync
+
+Combine SSR with URL routing so search state is shareable and bookmarkable:
+
+```tsx
+import { history } from "instantsearch.js/es/lib/routers";
+
+function createRouting() {
+  return {
+    router: history({
+      cleanUrlOnDispose: false,
+      getLocation: () =>
+        typeof window !== "undefined"
+          ? window.location
+          : new URL("http://localhost/search"),
+    }),
+    stateMapping: {
+      stateToRoute(uiState) {
+        const state = uiState["products"] || {};
+        return {
+          q: state.query || undefined,
+          page: state.page > 1 ? state.page : undefined,
+        };
+      },
+      routeToState(routeState) {
+        return {
+          products: {
+            query: routeState.q || "",
+            page: routeState.page ? Number(routeState.page) : undefined,
+          },
+        };
+      },
+    },
+  };
+}
+
+// Use in InstantSearch:
+<InstantSearch routing={createRouting()} ... />
+```
+
+URLs like `/search?q=keyboard&page=2` are fully SSR'd -- the server renders the results matching that query.
+
+## Verifying SSR
+
+```bash
+curl http://localhost:3001/search?q=keyboard
+```
+
+The HTML response will contain the actual product data without requiring JavaScript.
+
+---
+
+# Multilingual Search
+
+tsproxy supports locale-aware search through per-locale Typesense collections and computed fields.
+
+## How It Works
+
+When you define locales in your config, tsproxy automatically maps collection names to locale-specific variants:
+
+```ts
+// tsproxy.config.ts
+collections: {
+  products: {
+    fields: { /* ... */ },
+    locales: ["en", "fr", "de"],
+  },
+}
+```
+
+This creates the mapping:
+- `products` + locale `en` -> `products_en`
+- `products` + locale `fr` -> `products_fr`
+- `products` + locale `de` -> `products_de`
+
+## Sending the Locale
+
+The proxy reads the locale from the `X-Locale` header or `?locale=` query parameter:
+
+```bash
+curl -X POST http://localhost:3000/api/search \
+  -H "Content-Type: application/json" \
+  -H "X-Locale: fr" \
+  -d '{"requests":[{"indexName":"products","params":{"query":"chaise"}}]}'
+```
+
+This searches the `products_fr` collection.
+
+## Using with @tsproxy/js
+
+```ts
+const client = createSearchClient({
+  url: "http://localhost:3000",
+  locale: "fr",
+});
+```
+
+The adapter automatically sends the `X-Locale` header with every request.
+
+## Seeding Locale Collections
+
+```bash
+pnpm seed -- --locales
+```
+
+This creates `products_en`, `products_fr`, and `products_de` with the same sample data.
+
+## Computed Fields with Locale
+
+Computed fields receive the locale, enabling locale-aware transformations:
+
+```ts
+category_page_slug: {
+  type: "string",
+  facet: true,
+  compute: (doc, locale) => {
+    const color = String(doc.color || "").toLowerCase();
+    const category = String(doc.category || "").toLowerCase();
+    return `${color}-${category}`.replace(/\s+/g, "-");
+  },
+}
+```
+
+---
+
+# Production Deployment
+
+## Docker Compose (Recommended)
+
+The project includes a production-ready Docker Compose configuration:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d
+```
+
+This starts three services:
+- **Typesense** -- search engine with persistent data volume
+- **Redis** -- persistent queue backend with AOF
+- **Proxy** -- the tsproxy API server
+
+### Environment Variables
+
+Create a `.env` file:
+
+```env
+TYPESENSE_API_KEY=your-production-api-key
+PROXY_API_KEY=your-ingest-secret
+PROXY_PORT=3000
+CACHE_TTL=60
+CACHE_MAX_SIZE=1000
+QUEUE_CONCURRENCY=5
+QUEUE_MAX_SIZE=10000
+```
+
+### Health Checks
+
+All services include health checks. The proxy won't start until Typesense and Redis are healthy:
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+```json
+{
+  "status": "healthy",
+  "timestamp": "2026-04-03T12:00:00.000Z",
+  "proxy": { "status": "ok" },
+  "typesense": { "status": "ok", "host": "http://typesense:8108" },
+  "redis": { "status": "ok", "host": "redis:6379" }
+}
+```
+
+## Building the Docker Image
+
+```bash
+docker build -t tsproxy .
+```
+
+The multi-stage Dockerfile:
+1. Installs dependencies (pnpm)
+2. Builds `@tsproxy/js` and `@tsproxy/api`
+3. Produces a minimal Node.js 24 runtime image
+
+## Standalone Deployment
+
+If you prefer running without Docker:
+
+```bash
+# Build
+pnpm --filter @tsproxy/api build
+
+# Start
+TYPESENSE_API_KEY=your-key \
+TYPESENSE_HOST=your-typesense-host \
+REDIS_HOST=your-redis-host \
+node packages/api/dist/server.js
+```
+
+Or use the CLI:
+
+```bash
+pnpm --filter @tsproxy/api start
+```
+
+## Scaling
+
+- The proxy is stateless (cache is in-memory per instance, queue is in Redis)
+- Run multiple proxy instances behind a load balancer
+- All instances share the same Redis queue for ingestion
+- Each instance has its own LRU search cache
+
+---
+
+# @tsproxy/api
+
+HonoJS proxy server for Typesense with caching, rate limiting, and an ingestion queue.
+
+## Features
+
+- **Search proxy** -- InstantSearch-compatible multi-search endpoint
+- **LRU cache** -- configurable TTL and max size, error-aware (never caches failures)
+- **Rate limiting** -- per-IP, configurable per endpoint
+- **Ingestion queue** -- BullMQ (Redis) with in-memory fallback
+- **Computed fields** -- transform documents during ingestion
+- **Config file** -- `tsproxy.config.ts` with `defineConfig` helper
+- **CLI** -- `tsproxy dev` and `tsproxy start` commands
+
+## Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/api/search` | No | Multi-search (Algolia format) |
+| `GET` | `/api/health` | No | Health check (Typesense + Redis) |
+| `GET` | `/api/docs` | No | OpenAPI documentation |
+| `POST` | `/api/ingest/:collection/documents` | Yes | Upsert document |
+| `POST` | `/api/ingest/:collection/documents/import` | Yes | Bulk import |
+| `PATCH` | `/api/ingest/:collection/documents/:id` | Yes | Partial update |
+| `DELETE` | `/api/ingest/:collection/documents/:id` | Yes | Delete document |
+| `DELETE` | `/api/ingest/:collection/documents` | Yes | Delete by filter |
+| `GET` | `/api/ingest/queue/status` | Yes | Queue stats |
+| `GET` | `/api/suggestions` | No | Query suggestions (autocomplete) |
+| `POST` | `/api/analytics/click` | No | Track search click event |
+| `POST` | `/api/analytics/conversion` | No | Track conversion event |
+| `GET` | `/api/analytics/popular` | No | Popular queries |
+
+## Config File
+
+```ts
+import { defineConfig } from "@tsproxy/api";
+
+export default defineConfig({
+  typesense: {
+    host: "localhost",
+    port: 8108,
+    apiKey: "your-key",
+  },
+  server: { port: 3000, apiKey: "ingest-secret" },
+  cache: { ttl: 60, maxSize: 1000 },
+  queue: {
+    concurrency: 5,
+    maxSize: 10000,
+    redis: { host: "localhost", port: 6379 },
+  },
+  rateLimit: { search: 100, ingest: 30 },
+  collections: {
+    products: {
+      fields: {
+        name: { type: "string", searchable: true },
+        price: { type: "float", sortable: true },
+        category: { type: "string", facet: true },
+      },
+      locales: ["en", "fr"],
+      defaultSortBy: "created_at",
+    },
+  },
+});
+```
+
+## Field Types
+
+| Type | Description |
+|------|-------------|
+| `searchable` | Included in `query_by` for search |
+| `facet` | Available for faceted filtering |
+| `sortable` | Available for sort ordering |
+| `optional` | Allow null/missing values |
+| `compute` | Transform function `(doc, locale?) => value` |
+
+## Exports
+
+```ts
+import {
+  createApp,
+  loadConfig,
+  defineConfig,
+  resolveCollection,
+  getSearchableFields,
+  getFacetFields,
+  getSortableFields,
+  LRUCache,
+  IngestionQueue,
+  transformAlgoliaRequestToTypesense,
+  transformMultiSearchResponse,
+} from "@tsproxy/api";
+```
+
+---
+
+# @tsproxy/cli
+
+The CLI for tsproxy. Handles project setup, development, schema migration, seeding, and health checks.
+
+## Install
+
+```bash
+npm install -g @tsproxy/cli
+# or use with npx:
+npx @tsproxy/cli <command>
+```
+
+## Commands
+
+### `tsproxy init`
+
+Interactive project setup. Asks about your Typesense setup, queue backend, and frontend framework, then generates config files and installs dependencies.
+
+```bash
+npx @tsproxy/cli init
+```
+
+Generates:
+- `tsproxy.config.ts` -- proxy config with `defineConfig`
+- `docker-compose.yml` -- Typesense + Redis (if Docker selected)
+- `.env` -- connection details
+
+### `tsproxy dev`
+
+Start the proxy in development mode with hot reload.
+
+```bash
+npx tsproxy dev
+npx tsproxy dev --port 4000
+npx tsproxy dev --config ./custom.config.ts
+```
+
+### `tsproxy start`
+
+Start the proxy in production mode (requires `tsproxy build` first).
+
+```bash
+npx tsproxy start
+```
+
+### `tsproxy build`
+
+Build the proxy for production deployment.
+
+```bash
+npx tsproxy build
+```
+
+### `tsproxy seed <file>`
+
+Seed Typesense with data from a JSON or JSONL file. Data goes through the ingest API, so computed fields are applied and the queue is used.
+
+```bash
+npx tsproxy seed products.json --collection products
+npx tsproxy seed products.json --collection products --locale en
+```
+
+Options:
+- `--collection <name>` -- target collection (default: products)
+- `--locale <locale>` -- locale for collection routing
+
+### `tsproxy migrate`
+
+Sync Typesense schema with your `tsproxy.config.ts`. Shows a diff of what will change.
+
+```bash
+# Dry run (default)
+npx tsproxy migrate
+
+# Apply changes
+npx tsproxy migrate --apply
+
+# Drop and recreate
+npx tsproxy migrate --apply --drop
+```
+
+Output:
+```
+Migration plan:
+
+  + products -- Create with 5 fields
+  + products_en -- Create with 5 fields
+  + products_fr -- Up to date
+
+Dry run -- 2 change(s). Run with --apply to execute.
+```
+
+### `tsproxy generate`
+
+Generate `tsproxy.config.ts` from an existing Typesense schema. Connects to Typesense, fetches collections, and scaffolds a config with correct field types.
+
+```bash
+npx tsproxy generate
+npx tsproxy generate --host xyz.a1.typesense.net --port 443 --key your-key
+npx tsproxy generate -o custom-config.ts
+```
+
+Options:
+- `--host <host>` -- Typesense host
+- `--port <port>` -- Typesense port
+- `--key <key>` -- Typesense API key
+- `-o, --output <path>` -- Output file path (default: tsproxy.config.ts)
+
+### `tsproxy health`
+
+Check Typesense and Redis connectivity.
+
+```bash
+npx tsproxy health
+```
+
+---
+
+# @tsproxy/js
+
+InstantSearch-compatible `searchClient` adapter for the tsproxy API. Works with `react-instantsearch`, `vue-instantsearch`, or standalone.
+
+## Install
+
+```bash
+npm install @tsproxy/js
+```
+
+## Usage
+
+```ts
+import { createSearchClient } from "@tsproxy/js";
+
+const searchClient = createSearchClient({
+  url: "http://localhost:3000",
+  locale: "en",      // optional: sends X-Locale header
+  cache: true,       // optional: client-side result caching (default: true)
+});
+```
+
+## With react-instantsearch
+
+```tsx
+import { InstantSearch } from "react-instantsearch";
+import { createSearchClient } from "@tsproxy/js";
+
+const searchClient = createSearchClient({ url: "http://localhost:3000" });
+
+<InstantSearch searchClient={searchClient} indexName="products">
+  {/* widgets */}
+</InstantSearch>
+```
+
+## Features
+
+- **Request deduplication** -- identical concurrent requests are coalesced
+- **Result caching** -- configurable client-side cache
+- **Locale support** -- automatic `X-Locale` header
+- **InstantSearch-compatible** -- implements the `search()` and `searchForFacetValues()` interface
+
+## API
+
+### `createSearchClient(options)`
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `url` | `string` | -- | Proxy server URL (required) |
+| `locale` | `string` | -- | Locale for multilingual search |
+| `cache` | `boolean` | `true` | Enable client-side result caching |
+
+Returns a `SearchClient` with:
+- `search(requests)` -- execute a multi-search
+- `searchForFacetValues(requests)` -- search facet values
+- `clearCache()` -- clear the result cache
+
+## Types
+
+```ts
+import type {
+  SearchClient,
+  SearchRequest,
+  SearchResponse,
+  SearchResponseResult,
+  Hit,
+  FacetValue,
+} from "@tsproxy/js";
+```
+
+---
+
+# @tsproxy/react
+
+Headless React components for search UI with a BaseUI-inspired overrides pattern. Ships unstyled -- you control all rendering.
+
+## Install
+
+```bash
+npm install @tsproxy/react @tsproxy/js react-instantsearch
+```
+
+## Components
+
+### SearchBox
+
+Sub-elements: `Root`, `Form`, `Input`, `SubmitButton`, `ResetButton`
+
+```tsx
+<SearchBox
+  placeholder="Search..."
+  queryHook={debouncedSearch}  // optional: debounce/transform queries
+  overrides={{
+    Input: { props: { className: "search-input" } },
+    SubmitButton: { props: { hidden: true } },
+  }}
+/>
+```
+
+### Hits
+
+Sub-elements: `Root`, `List`, `Item`
+
+```tsx
+<Hits
+  hitComponent={({ hit }) => <ProductCard product={hit} />}
+  overrides={{
+    List: { props: { className: "grid grid-cols-4 gap-4" } },
+  }}
+/>
+```
+
+### RefinementList
+
+Sub-elements: `Root`, `List`, `Item`, `Label`, `Checkbox`, `LabelText`, `Count`
+
+```tsx
+<RefinementList
+  attribute="category"
+  overrides={{
+    Checkbox: { props: { className: "custom-checkbox" } },
+    Count: { props: { className: "text-gray-400 text-xs" } },
+  }}
+/>
+```
+
+### Pagination
+
+Sub-elements: `Root`, `List`, `Item`, `Link`
+
+```tsx
+<Pagination
+  padding={3}
+  overrides={{
+    Link: { props: { className: "px-3 py-1 rounded hover:bg-gray-100" } },
+  }}
+/>
+```
+
+### Stats
+
+Sub-elements: `Root`, `Text`
+
+```tsx
+<Stats
+  formatText={(nbHits, ms) => `${nbHits} products (${ms}ms)`}
+  overrides={{
+    Root: { props: { className: "text-sm text-gray-500" } },
+  }}
+/>
+```
+
+### SortBy
+
+Sub-elements: `Root`, `Select`, `Option`
+
+```tsx
+<SortBy
+  items={[
+    { value: "products", label: "Relevance" },
+    { value: "products/sort/price:asc", label: "Price: Low to High" },
+  ]}
+/>
+```
+
+### Autocomplete
+
+Sub-elements: `Root`, `Input`, `List`, `Item`, `Highlight`
+
+Standalone autocomplete that calls the `/api/suggestions` endpoint. Works outside of InstantSearch.
+
+```tsx
+<Autocomplete
+  serverUrl="http://localhost:3000"
+  collection="products"
+  placeholder="Search products..."
+  onSelect={(suggestion) => console.log(suggestion)}
+  overrides={{
+    Input: { props: { className: "w-full border rounded px-3 py-2" } },
+    List: { props: { className: "absolute bg-white border rounded shadow mt-1 w-full" } },
+    Item: { props: { className: "px-3 py-2 hover:bg-gray-100 cursor-pointer" } },
+  }}
+/>
+```
+
+### NoResults
+
+Sub-elements: `Root`, `Title`, `Message`
+
+```tsx
+<NoResults
+  title="Nothing found"
+  message="Try different search terms."
+/>
+```
+
+### HitsSkeleton
+
+Sub-elements: `Root`, `List`, `Item`
+
+```tsx
+<HitsSkeleton
+  count={8}
+  overrides={{
+    List: { props: { className: "grid grid-cols-4 gap-4" } },
+  }}
+/>
+```
+
+### LocaleSelector
+
+Sub-elements: `Root`, `Select`, `Option`
+
+```tsx
+<LocaleSelector
+  locales={[
+    { code: "en", label: "English" },
+    { code: "fr", label: "French" },
+  ]}
+/>
+```
+
+## Overrides System
+
+Every component accepts an `overrides` prop. Each sub-element can be:
+
+Extended with props:
+```tsx
+overrides={{
+  Input: { props: { className: "my-class", "aria-label": "Search" } },
+}}
+```
+
+Extended with a function (receives default props):
+```tsx
+overrides={{
+  Item: {
+    props: (defaultProps) => ({
+      ...defaultProps,
+      className: `${defaultProps.className} extra-class`,
+    }),
+  },
+}}
+```
+
+Replaced entirely:
+```tsx
+overrides={{
+  Checkbox: {
+    component: ({ checked, onChange }) => (
+      <Switch checked={checked} onChange={onChange} />
+    ),
+  },
+}}
+```
+
+## Types
+
+```ts
+import type {
+  Override,
+  Overrides,
+  SearchBoxProps,
+  SearchBoxElements,
+  HitsProps,
+  HitsElements,
+  RefinementListProps,
+  RefinementListElements,
+  PaginationProps,
+  PaginationElements,
+  StatsProps,
+  StatsElements,
+  SortByProps,
+  SortByElements,
+  NoResultsProps,
+  NoResultsElements,
+  HitsSkeletonProps,
+  HitsSkeletonElements,
+} from "@tsproxy/react";
+```
+
+---
+
+# Configuration Reference
+
+## tsproxy.config.ts
+
+```ts
+import { defineConfig } from "@tsproxy/api";
+
+export default defineConfig({
+  typesense: { ... },
+  server: { ... },
+  cache: { ... },
+  queue: { ... },
+  rateLimit: { ... },
+  collections: { ... },
+});
+```
+
+## `typesense`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `host` | `string` | `"localhost"` | Typesense host |
+| `port` | `number` | `8108` | Typesense port |
+| `protocol` | `"http" \| "https"` | `"http"` | Connection protocol |
+| `apiKey` | `string` | -- | Typesense API key |
+
+## `server`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `port` | `number` | `3000` | Proxy server port |
+| `apiKey` | `string` | -- | API key for ingest endpoints |
+
+## `cache`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `ttl` | `number` | `60` | Cache TTL in seconds |
+| `maxSize` | `number` | `1000` | Maximum cached entries |
+
+## `queue`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `concurrency` | `number` | `5` | Max concurrent Typesense writes |
+| `maxSize` | `number` | `10000` | Max queued tasks before rejecting |
+| `redis` | `{ host?, port? }` | -- | Redis config (enables BullMQ) |
+
+## `rateLimit`
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `search` | `number` | `100` | Search requests/min per IP |
+| `ingest` | `number` | `30` | Ingest requests/min per IP |
+
+## `collections`
+
+```ts
+collections: {
+  [collectionName: string]: {
+    fields: Record<string, FieldConfig>;
+    locales?: string[];
+    defaultSortBy?: string;
+    tokenSeparators?: string[];
+    symbolsToIndex?: string[];
+    enableNestedFields?: boolean;
+    synonyms?: Record<string, SynonymDefinition>;
+    curations?: Record<string, CurationDefinition>;
+  }
+}
+```
+
+### FieldConfig
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | `string` | Typesense field type (`"string"`, `"float"`, `"int64"`, `"bool"`, etc.) |
+| `searchable` | `boolean` | Include in `query_by` |
+| `facet` | `boolean` | Enable faceting |
+| `sortable` | `boolean` | Enable sorting |
+| `optional` | `boolean` | Allow null/missing values |
+| `locale` | `string` | Stemming locale |
+| `infix` | `boolean` | Enable infix search |
+| `compute` | `(doc, locale?) => value` | Computed field transform |
+
+### Synonyms
+
+Define synonyms in your collection config. Applied via `tsproxy migrate --apply`.
+
+```ts
+synonyms: {
+  "laptop-notebook": {
+    synonyms: ["laptop", "notebook", "portable computer"],
+  },
+  "phone-to-mobile": {
+    root: "phone",
+    words: ["mobile", "cell", "smartphone"],
+  },
+}
+```
+
+### Curations
+
+Pin or hide documents for specific queries. Applied via `tsproxy migrate --apply`.
+
+```ts
+curations: {
+  "featured-headphones": {
+    query: "headphones",
+    match: "exact",
+    pinnedIds: ["1", "9"],
+    hiddenIds: ["7"],
+  },
+}
+```
+
+---
+
+# Search API Reference
+
+## POST /api/search
+
+Execute a multi-search query. Accepts the Algolia InstantSearch multi-search format.
+
+### Request
+
+```json
+{
+  "requests": [
+    {
+      "indexName": "products",
+      "params": {
+        "query": "keyboard",
+        "hitsPerPage": 12,
+        "page": 0,
+        "facets": ["category", "brand"],
+        "maxValuesPerFacet": 10,
+        "facetFilters": [["category:Electronics"]],
+        "highlightPreTag": "__ais-highlight__",
+        "highlightPostTag": "__/ais-highlight__"
+      }
+    }
+  ]
+}
+```
+
+The `params` field accepts either an object (InstantSearch v7+) or a URL-encoded string (legacy).
+
+### Headers
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Content-Type` | Yes | `application/json` |
+| `X-Locale` | No | Locale for multilingual collection resolution |
+
+### Response
+
+```json
+{
+  "results": [
+    {
+      "hits": [
+        {
+          "objectID": "5",
+          "name": "Mechanical Keyboard",
+          "description": "RGB mechanical keyboard with Cherry MX switches",
+          "price": 149.99,
+          "category": "Electronics",
+          "brand": "KeyCraft",
+          "_highlightResult": {
+            "name": {
+              "value": "Mechanical <mark>Keyboard</mark>",
+              "matchLevel": "full",
+              "matchedWords": ["Keyboard"]
+            }
+          }
+        }
+      ],
+      "nbHits": 1,
+      "page": 0,
+      "nbPages": 1,
+      "hitsPerPage": 12,
+      "processingTimeMS": 1,
+      "query": "keyboard",
+      "facets": {
+        "category": { "Electronics": 1 },
+        "brand": { "KeyCraft": 1 }
+      },
+      "exhaustiveNbHits": true
+    }
+  ]
+}
+```
+
+### Error Response
+
+When Typesense returns errors, the response includes an `_errors` array:
+
+```json
+{
+  "results": [{ "hits": [], "nbHits": 0 }],
+  "_errors": ["Collection `products` not found."]
+}
+```
+
+### Caching
+
+Responses are cached in an LRU cache keyed by `(requests, locale)`. Error responses are never cached.
+
+### Rate Limiting
+
+Limited to `RATE_LIMIT_SEARCH` requests per minute per IP (default: 100).
+
+---
+
+# Ingest API Reference
+
+All ingest endpoints require the `X-API-Key` header.
+
+## POST /api/ingest/:collection/documents
+
+Upsert a single document.
+
+Request: JSON document body.
+Response: `201` with the upserted document.
+
+## POST /api/ingest/:collection/documents/import
+
+Bulk import documents.
+
+Request: JSON array of documents.
+Response: `200` with import results (per-document success/failure).
+
+## PATCH /api/ingest/:collection/documents/:id
+
+Partial update a document.
+
+Request: JSON with fields to update.
+Response: `200` with the updated document.
+
+## DELETE /api/ingest/:collection/documents/:id
+
+Delete a single document by ID.
+
+Response: `200` with the deleted document.
+
+## DELETE /api/ingest/:collection/documents?filter_by=
+
+Delete documents matching a filter.
+
+Query params:
+- `filter_by` (required) -- Typesense filter expression
+
+Response: `200` with deletion count.
+
+## GET /api/ingest/queue/status
+
+Get ingestion queue statistics.
+
+Response:
+
+```json
+{
+  "pending": 0,
+  "active": 0,
+  "completed": 42,
+  "failed": 0,
+  "maxSize": 10000,
+  "concurrency": 5,
+  "backend": "redis"
+}
+```
+
+## Authentication
+
+All ingest endpoints require `X-API-Key` header matching `PROXY_API_KEY`:
+
+```bash
+curl -H "X-API-Key: your-secret" http://localhost:3000/api/ingest/...
+```
+
+Missing or invalid key returns `401`.
+
+## Rate Limiting
+
+Limited to `RATE_LIMIT_INGEST` requests per minute per IP (default: 30).
+
+---
+
+# Health API Reference
+
+## GET /api/health
+
+Returns the health status of the proxy and its dependencies.
+
+### Response (healthy)
+
+```json
+{
+  "status": "healthy",
+  "timestamp": "2026-04-03T12:00:00.000Z",
+  "proxy": { "status": "ok" },
+  "typesense": {
+    "status": "ok",
+    "host": "http://localhost:8108"
+  },
+  "redis": {
+    "status": "ok",
+    "host": "localhost:6379"
+  }
+}
+```
+
+### Response (degraded)
+
+HTTP `503`:
+
+```json
+{
+  "status": "degraded",
+  "timestamp": "2026-04-03T12:00:00.000Z",
+  "proxy": { "status": "ok" },
+  "typesense": {
+    "status": "error",
+    "host": "http://localhost:8108",
+    "error": "ECONNREFUSED"
+  },
+  "redis": {
+    "status": "ok",
+    "host": "localhost:6379"
+  }
+}
+```
+
+### Redis Not Configured
+
+When Redis is not configured, the `redis.status` field shows `"not_configured"`:
+
+```json
+{
+  "redis": { "status": "not_configured" }
+}
+```

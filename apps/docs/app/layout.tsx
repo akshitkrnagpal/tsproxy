@@ -4,9 +4,30 @@ import { getPageMap } from "nextra/page-map";
 import "nextra-theme-docs/style.css";
 
 export const metadata = {
-  title: "tsproxy — Typesense Search Proxy",
+  title: {
+    default: "tsproxy — Typesense Search Proxy",
+    template: "%s — tsproxy",
+  },
   description:
     "A search proxy framework for Typesense with caching, rate limiting, ingestion queue, and headless React components.",
+  metadataBase: new URL("https://tsproxy.akshit.io"),
+  openGraph: {
+    title: "tsproxy — Typesense Search Proxy",
+    description:
+      "A search proxy framework for Typesense with caching, rate limiting, ingestion queue, and headless React components.",
+    url: "https://tsproxy.akshit.io",
+    siteName: "tsproxy",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "tsproxy — Typesense Search Proxy",
+    description:
+      "A search proxy framework for Typesense with caching, rate limiting, ingestion queue, and headless React components.",
+  },
+  alternates: {
+    canonical: "https://tsproxy.akshit.io",
+  },
 };
 
 const navbar = (
