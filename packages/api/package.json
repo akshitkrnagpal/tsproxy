@@ -10,6 +10,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./nextjs": {
+      "types": "./dist/nextjs.d.ts",
+      "import": "./dist/nextjs.js",
+      "default": "./dist/nextjs.js"
     }
   },
   "bin": {
@@ -28,7 +33,7 @@
   "keywords": ["typesense", "search", "proxy", "hono", "cache", "rate-limit"],
   "scripts": {
     "dev": "tsx watch src/cli.ts dev",
-    "build": "tsup src/index.ts src/server.ts src/cli.ts --format esm --dts --tsconfig tsconfig.build.json",
+    "build": "tsup src/index.ts src/server.ts src/cli.ts src/nextjs.ts --format esm --dts --tsconfig tsconfig.build.json",
     "start": "node dist/cli.js start",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
