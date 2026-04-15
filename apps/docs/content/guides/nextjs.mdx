@@ -1,0 +1,317 @@
+# Next.js Integration
+
+tsproxy can run as a standalone server or embedded inside your Next.js app using the `@tsproxy/api/nextjs` adapter. Embedding means no separate server to deploy - the proxy runs inside your API routes.
+
+## When to embed vs standalone
+
+**Embed in Next.js** when:
+- You want a single deployment (no separate proxy server)
+- You're on Vercel or a platform that doesn't support Docker
+- You have a small-to-medium search workload
+
+**Run standalone** when:
+- You need horizontal scaling (proxy is stateless, run multiple instances)
+- You want the BullMQ Redis queue for ingestion (embedded mode uses in-memory queue)
+- Multiple frontends share the same proxy
+
+## Setup
+
+### 1. Install
+
+```bash
+npm install @tsproxy/api @tsproxy/js @tsproxy/react react-instantsearch
+```
+
+### 2. Configure
+
+Create `tsproxy.config.ts` at your project root (next to `next.config.js`):
+
+```ts
+import { defineConfig } from "@tsproxy/api";
+
+export default defineConfig({
+  typesense: {
+    host: "your-typesense-host.com",  // or localhost:8108 for local dev
+    port: 443,
+    protocol: "https",
+    apiKey: process.env.TYPESENSE_API_KEY!,
+  },
+  server: {
+    port: 3000,  // ignored when embedded, but required by config
+    apiKey: process.env.TSPROXY_INGEST_KEY!,  // protects ingest endpoints
+  },
+  cache: { ttl: 60, maxSize: 1000 },
+  rateLimit: { search: 100, ingest: 30 },
+  collections: {
+    products: {
+      fields: {
+        name: { type: "string", searchable: true },
+        price: { type: "float", sortable: true },
+        category: { type: "string", facet: true },
+      },
+    },
+  },
+});
+```
+
+### 3. Typesense backend
+
+You need a running Typesense instance. Options:
+
+- **Typesense Cloud** (easiest): [cloud.typesense.org](https://cloud.typesense.org)
+- **Docker** (local dev): `docker run -p 8108:8108 -v /tmp/typesense-data:/data typesense/typesense:27.1 --data-dir /data --api-key=xyz`
+- **Self-hosted**: see [typesense.org/docs/guide/install-typesense](https://typesense.org/docs/guide/install-typesense.html)
+
+Redis is optional. Without it, the ingestion queue runs in-memory (fine for development and small workloads).
+
+## Pages Router
+
+### API route
+
+Create `pages/api/tsproxy/[...path].ts`:
+
+```ts
+import { createPagesRouterHandler } from "@tsproxy/api/nextjs";
+
+export default createPagesRouterHandler({
+  basePath: "/api/tsproxy",
+});
+```
+
+This mounts the entire tsproxy API under `/api/tsproxy`. The proxy endpoints become:
+
+| Proxy endpoint | Next.js URL |
+|---|---|
+| `/api/search` | `/api/tsproxy/api/search` |
+| `/api/health` | `/api/tsproxy/api/health` |
+| `/api/ingest/:collection/documents` | `/api/tsproxy/api/ingest/:collection/documents` |
+
+### Search page
+
+Create `pages/search.tsx`:
+
+```tsx
+import { useMemo } from "react";
+import { InstantSearch, Configure } from "react-instantsearch";
+import { InstantSearchSSRProvider, getServerState } from "react-instantsearch";
+import { renderToString } from "react-dom/server";
+import { createSearchClient } from "@tsproxy/js";
+import { SearchBox, Hits, RefinementList, Pagination, Stats } from "@tsproxy/react";
+import type { GetServerSideProps, InferGetServerSidePropsType } from "next";
+
+// Point at your own Next.js API route, not an external proxy
+const PROXY_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+const SEARCH_URL = `${PROXY_URL}/api/tsproxy`;
+
+function SearchApp() {
+  const searchClient = useMemo(
+    () => createSearchClient({ url: SEARCH_URL }),
+    [],
+  );
+
+  return (
+    <InstantSearch searchClient={searchClient} indexName="products">
+      <Configure hitsPerPage={12} />
+
+      <div style={{ display: "flex", gap: "2rem" }}>
+        {/* Sidebar */}
+        <div style={{ width: 200 }}>
+          <h3>Category</h3>
+          <RefinementList attribute="category" />
+        </div>
+
+        {/* Main */}
+        <div style={{ flex: 1 }}>
+          <SearchBox placeholder="Search products..." />
+          <Stats />
+          <Hits
+            hitComponent={({ hit }) => (
+              <div>
+                <h4>{hit.name as string}</h4>
+                <p>${hit.price as number}</p>
+              </div>
+            )}
+          />
+          <Pagination />
+        </div>
+      </div>
+    </InstantSearch>
+  );
+}
+
+export const getServerSideProps: GetServerSideProps = async () => {
+  const serverState = await getServerState(<SearchApp />, {
+    renderToString,
+  });
+
+  return {
+    props: {
+      serverState: JSON.parse(JSON.stringify(serverState)),
+    },
+  };
+};
+
+export default function SearchPage({
+  serverState,
+}: InferGetServerSidePropsType<typeof getServerSideProps>) {
+  return (
+    <InstantSearchSSRProvider {...serverState}>
+      <SearchApp />
+    </InstantSearchSSRProvider>
+  );
+}
+```
+
+### Environment variables
+
+Add to `.env.local`:
+
+```env
+TYPESENSE_API_KEY=your-typesense-api-key
+TSPROXY_INGEST_KEY=a-secret-for-ingest-endpoints
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+```
+
+`TYPESENSE_API_KEY` stays server-side only. The search endpoint is public (no key needed) - the proxy handles authentication to Typesense so your API key is never exposed to the browser.
+
+## App Router
+
+### API route
+
+Create `app/api/tsproxy/[...path]/route.ts`:
+
+```ts
+import { createAppRouterHandler } from "@tsproxy/api/nextjs";
+
+const { GET, POST, PUT, DELETE, PATCH } = createAppRouterHandler({
+  basePath: "/api/tsproxy",
+});
+
+export { GET, POST, PUT, DELETE, PATCH };
+```
+
+### Search page
+
+App Router search pages work the same way as Pages Router, but use client components for InstantSearch:
+
+```tsx
+// app/search/page.tsx
+"use client";
+
+import { useMemo } from "react";
+import { InstantSearch, Configure } from "react-instantsearch";
+import { createSearchClient } from "@tsproxy/js";
+import { SearchBox, Hits, RefinementList, Pagination, Stats } from "@tsproxy/react";
+
+const SEARCH_URL = `${process.env.NEXT_PUBLIC_SITE_URL || ""}/api/tsproxy`;
+
+export default function SearchPage() {
+  const searchClient = useMemo(
+    () => createSearchClient({ url: SEARCH_URL }),
+    [],
+  );
+
+  return (
+    <InstantSearch searchClient={searchClient} indexName="products">
+      <Configure hitsPerPage={12} />
+
+      <div style={{ display: "flex", gap: "2rem" }}>
+        <div style={{ width: 200 }}>
+          <h3>Category</h3>
+          <RefinementList attribute="category" />
+        </div>
+
+        <div style={{ flex: 1 }}>
+          <SearchBox placeholder="Search products..." />
+          <Stats />
+          <Hits
+            hitComponent={({ hit }) => (
+              <div>
+                <h4>{hit.name as string}</h4>
+                <p>${hit.price as number}</p>
+              </div>
+            )}
+          />
+          <Pagination />
+        </div>
+      </div>
+    </InstantSearch>
+  );
+}
+```
+
+> **Note:** SSR with `getServerState` in App Router requires a different pattern using React Server Components. For SSR search, use the Pages Router approach or call the search API directly from a server component and pass results as props.
+
+## Ingesting data
+
+Use the ingest endpoint to push documents into Typesense through the proxy. The proxy validates, transforms (computed fields), and queues the writes.
+
+```ts
+// scripts/seed.ts (or any server-side code)
+const INGEST_URL = "http://localhost:3000/api/tsproxy/api/ingest";
+const INGEST_KEY = process.env.TSPROXY_INGEST_KEY;
+
+// Single document
+await fetch(`${INGEST_URL}/products/documents`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${INGEST_KEY}`,
+  },
+  body: JSON.stringify({
+    id: "1",
+    name: "Mechanical Keyboard",
+    price: 149.99,
+    category: "Electronics",
+  }),
+});
+
+// Bulk import
+await fetch(`${INGEST_URL}/products/documents/import`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/x-jsonl",
+    Authorization: `Bearer ${INGEST_KEY}`,
+  },
+  body: products.map((p) => JSON.stringify(p)).join("\n"),
+});
+```
+
+## Customizing components
+
+Every `@tsproxy/react` component accepts an `overrides` prop for styling:
+
+```tsx
+<SearchBox
+  overrides={{
+    Root: { props: { className: "my-search-box" } },
+    Input: { props: { className: "w-full border rounded px-4 py-2" } },
+    SubmitButton: { props: { hidden: true } },
+  }}
+/>
+
+<Hits
+  hitComponent={({ hit }) => (
+    <div className="border rounded p-4">
+      <h3 className="font-bold">{hit.name as string}</h3>
+      <p className="text-gray-500">${hit.price as number}</p>
+    </div>
+  )}
+/>
+```
+
+## Troubleshooting
+
+**Search returns empty results**
+- Check that Typesense has documents: `curl http://your-typesense:8108/collections/products/documents/search?q=*&query_by=name -H "X-TYPESENSE-API-KEY: your-key"`
+- Verify `tsproxy.config.ts` has the correct Typesense host and API key
+- Check `/api/tsproxy/api/health` returns healthy for all services
+
+**"Cannot find module @tsproxy/api/nextjs"**
+- Make sure you have `@tsproxy/api@0.2.0` or later. The Next.js adapter was added in 0.2.0.
+
+**Ingest returns 401**
+- The ingest endpoints require the `Authorization: Bearer <key>` header matching `server.apiKey` in your config.
+
+**CORS errors**
+- The proxy enables CORS by default. If you're embedding in Next.js and calling from the same origin, CORS shouldn't be an issue. Check that `NEXT_PUBLIC_SITE_URL` matches your actual URL.
